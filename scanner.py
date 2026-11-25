@@ -1,5 +1,5 @@
 """H4 sweep + M15 CISD / Model-1 scanner (forex + metals). Runs on GitHub Actions."""
-import os, json, time
+import os, json, time, random
 from datetime import datetime, timezone
 import requests, pandas as pd
 
@@ -12,6 +12,13 @@ FRESH_MIN = 90                            # ignore setups older than this
 TZ = "Europe/Athens"                      # broker-like time => H4 candles 00,04,08...
 KEY, TOKEN, CHAT = os.getenv("TWELVEDATA_KEY"), os.getenv("TG_TOKEN"), os.getenv("TG_CHAT")
 FILE = "docs/signals.json"
+BEAT_H = float(os.getenv("BEAT_HOURS", "4"))   # "signal yo'q" xabari oralig'i (soat), 0 = o'chiq
+SENT = [0]
+CHEER = ["😊 Signal yo'q, lekin bot uyg'oq va bozorni kuzatib turibdi!",
+         "☕ Hozircha tinch. Sen choyingni ich, qolganini bot ko'radi!",
+         "🧘 Sabr — trader kuchi. Signal yo'q, lekin hammasi nazoratda!",
+         "🛰 Radar ishlayapti, sweep topilsa birinchi bo'lib aytaman!",
+         "🎯 Signal yo'q. Yaxshi setup kutamiz, tasodifiy savdo kerak emas!"]
 BITGET = {"XAG/USD": "XAGUSDT"}           # symbols fetched from Bitget (no API key needed)
 M15 = pd.Timedelta(minutes=15)
 
@@ -122,13 +129,16 @@ def monitor(df, s):
             return True
     return False
 
-def tg(text, sym):
+def tg(text, sym=None, count=True):
+    if count:
+        SENT[0] += 1
     if not (TOKEN and CHAT):
         print(text); return
-    url = "https://www.tradingview.com/chart/?symbol=" + SYMBOLS[sym]
-    requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", timeout=20, json=dict(
-        chat_id=CHAT, text=text, parse_mode="HTML",
-        reply_markup={"inline_keyboard": [[{"text": "TradingView", "url": url}]]}))
+    body = dict(chat_id=CHAT, text=text, parse_mode="HTML")
+    if sym:
+        body["reply_markup"] = {"inline_keyboard": [[{"text": "TradingView",
+                                "url": "https://www.tradingview.com/chart/?symbol=" + SYMBOLS[sym]}]]}
+    requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", timeout=20, json=body)
 
 def fresh(ts):
     return (pd.Timestamp.now(TZ).tz_localize(None) - pd.Timestamp(ts)) <= pd.Timedelta(minutes=FRESH_MIN)
@@ -159,9 +169,17 @@ def main():
             if s["id"] not in sigs and fresh(s["t"]):
                 sigs[s["id"]] = s
                 tg(f"🚨 <b>{sym} {s['side'].upper()}</b> [{s['mode'].upper()}]\nEntry {s['entry']:.5g}\nSL {s['sl']:.5g}\nTP {s['tp']:.5g} (RR {RR:g})", sym)
-    new = dict(signals=sorted(sigs.values(), key=lambda x: x["t"])[-200:],
+    beat = st.get("last_beat", "")
+    due = not beat or (now - datetime.fromisoformat(beat)).total_seconds() >= BEAT_H * 3600
+    if SENT[0] > 0:
+        beat = now.isoformat()
+    elif BEAT_H > 0 and due:
+        n = sum(1 for x in sigs.values() if x["status"] == "active")
+        tg(random.choice(CHEER) + f"\n\nKuzatilmoqda: {', '.join(SYMBOLS)}\nFaol signallar: {n}", count=False)
+        beat = now.isoformat()
+    new = dict(last_beat=beat, signals=sorted(sigs.values(), key=lambda x: x["t"])[-200:],
                pending=sorted(pend.values(), key=lambda x: x["t"])[-40:])
-    if {k: new[k] for k in new} != {k: st[k] for k in new}:
+    if {k: new[k] for k in new} != {k: st.get(k) for k in new}:
         new["updated"] = now.strftime("%Y-%m-%d %H:%M UTC")
         json.dump(new, open(FILE, "w"), indent=1, default=float)
 

@@ -12,9 +12,25 @@ FRESH_MIN = 90                            # ignore setups older than this
 TZ = "Europe/Athens"                      # broker-like time => H4 candles 00,04,08...
 KEY, TOKEN, CHAT = os.getenv("TWELVEDATA_KEY"), os.getenv("TG_TOKEN"), os.getenv("TG_CHAT")
 FILE = "docs/signals.json"
+BITGET = {"XAG/USD": "XAGUSDT"}           # symbols fetched from Bitget (no API key needed)
 M15 = pd.Timedelta(minutes=15)
 
+def fetch_bitget(sym):
+    r = requests.get("https://api.bitget.com/api/v2/mix/market/candles", timeout=30, params=dict(
+        symbol=BITGET[sym], granularity="15m", limit=500, productType="usdt-futures")).json()
+    if r.get("code") != "00000":
+        raise RuntimeError(str(r))
+    df = pd.DataFrame([x[:5] for x in r["data"]], columns=["ts", "open", "high", "low", "close"])
+    df["t"] = pd.to_datetime(df.ts.astype("int64"), unit="ms", utc=True).dt.tz_convert(TZ).dt.tz_localize(None)
+    for c in ("open", "high", "low", "close"):
+        df[c] = df[c].astype(float)
+    df = df.sort_values("t").set_index("t")[["open", "high", "low", "close"]]
+    now = pd.Timestamp.now(TZ).tz_localize(None)
+    return df[df.index + M15 <= now]
+
 def fetch(sym):
+    if sym in BITGET:
+        return fetch_bitget(sym)
     r = requests.get("https://api.twelvedata.com/time_series", timeout=30, params=dict(
         symbol=sym, interval="15min", outputsize=500, timezone=TZ, apikey=KEY)).json()
     if "values" not in r:

@@ -14,6 +14,8 @@ KEY, TOKEN, CHAT = os.getenv("TWELVEDATA_KEY"), os.getenv("TG_TOKEN"), os.getenv
 FILE = "docs/signals.json"
 BEAT_H = float(os.getenv("BEAT_HOURS", "4"))   # "signal yo'q" xabari oralig'i (soat), 0 = o'chiq
 SENT = [0]
+_repo = os.getenv("GITHUB_REPOSITORY", "")   # "user/repo" (GitHub Actions sets it)
+DASH = os.getenv("DASH_URL") or (f"https://{_repo.split('/')[0]}.github.io/{_repo.split('/')[1]}/" if "/" in _repo else "")
 CHEER = ["😊 Signal yo'q, lekin bot uyg'oq va bozorni kuzatib turibdi!",
          "☕ Hozircha tinch. Sen choyingni ich, qolganini bot ko'radi!",
          "🧘 Sabr — trader kuchi. Signal yo'q, lekin hammasi nazoratda!",
@@ -135,9 +137,13 @@ def tg(text, sym=None, count=True):
     if not (TOKEN and CHAT):
         print(text); return
     body = dict(chat_id=CHAT, text=text, parse_mode="HTML")
+    btns = []
     if sym:
-        body["reply_markup"] = {"inline_keyboard": [[{"text": "TradingView",
-                                "url": "https://www.tradingview.com/chart/?symbol=" + SYMBOLS[sym]}]]}
+        btns.append({"text": "TradingView", "url": "https://www.tradingview.com/chart/?symbol=" + SYMBOLS[sym]})
+    if DASH:
+        btns.append({"text": "📊 Dashboard", "web_app": {"url": DASH}})
+    if btns:
+        body["reply_markup"] = {"inline_keyboard": [btns]}
     requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", timeout=20, json=body)
 
 def fresh(ts):

@@ -16,14 +16,14 @@ a{color:inherit}.tp{color:var(--g)}.sl{color:var(--r)}.be{color:var(--y)}.n{font
 const TV={"EUR/USD":"EURUSD","GBP/USD":"GBPUSD","XAU/USD":"XAUUSD","XAG/USD":"XAGUSD"};
 const f=x=>(+x).toPrecision(6).replace(/\.?0+$/,"");
 const link=s=>`<a href="https://www.tradingview.com/chart/?symbol=OANDA:${TV[s]}" target="_blank"><b>${s}</b></a>`;
-const card=(s,h)=>`<div class="card"><div class="row"><span>${link(s.sym)} <span class="${s.side}">${s.side.toUpperCase()}</span> <span class="s">${s.mode}</span></span>
+const card=(s,h)=>`<div class="card"><div class="row"><span>${link(s.sym)} <span class="${s.side}">${s.side.toUpperCase()}</span> <span class="s">${s.mode==="early"?"erta CISD":"CISD"}</span> ${s.smt===true?'<span class="buy">SMT✓</span>':''}</span>
 <span class="${s.status}">${h?s.status.toUpperCase():"ACTIVE"}</span></div>
 <div class="s n">Entry ${f(s.entry)} · SL ${f(s.sl)} · TP ${f(s.tp)}</div><div class="s">${s.t}</div></div>`;
 fetch("signals.json?"+Date.now()).then(r=>r.json()).then(d=>{
  u.textContent="Oxirgi o'zgarish: "+(d.updated||"—");
  const act=d.signals.filter(s=>s.status=="active").reverse(),his=d.signals.filter(s=>s.status!="active").reverse();
  a.innerHTML=act.map(s=>card(s)).join("")||'<div class="s">Hozircha yo\'q</div>';
- p.innerHTML=d.pending.slice(-8).reverse().map(x=>`<div class="card"><div class="row"><span>${link(x.sym)} <span class="${x.side}">${x.side.toUpperCase()}</span></span><span class="s n">level ${f(x.level)}</span></div><div class="s">${x.t}</div></div>`).join("")||'<div class="s">Yo\'q</div>';
+ p.innerHTML=d.pending.slice(-8).reverse().map(x=>`<div class="card"><div class="row"><span>${link(x.sym)} <span class="${x.side}">${x.side.toUpperCase()}</span></span><span class="s n">${x.smt===true?'<span class="buy">SMT✓</span> ':''}level ${f(x.level)}</span></div><div class="s">${x.t}</div></div>`).join("")||'<div class="s">Yo\'q</div>';
  h.innerHTML=his.map(s=>card(s,1)).join("")||'<div class="s">Hozircha yo\'q</div>';
 });
 </script></body></html>
